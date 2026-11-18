@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GovExam RAG Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f1f4f7;--card:#fff;--tx:#101828;--mut:#5b6678;--ac:#0b6e6e;--acs:#dff1f0;--bd:#d6dde6;--ok:#18794e;--bad:#b42318;--mk:#ffe08a;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1419;--card:#161e26;--tx:#e8edf3;--mut:#93a0b1;--ac:#4fc3bd;--acs:#16302f;--bd:#2a3541;--ok:#52c58a;--bad:#ff8a7a;--mk:#5c4a00;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1419;--card:#161e26;--tx:#e8edf3;--mut:#93a0b1;--ac:#4fc3bd;--acs:#16302f;--bd:#2a3541;--ok:#52c58a;--bad:#ff8a7a;--mk:#5c4a00;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.6 Hind,system-ui,"Noto Sans Devanagari",sans-serif}
+main{max-width:760px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.55rem;line-height:1.2;margin:8px 0 4px}
+h2{font-size:1.1rem;margin:0 0 8px}
+.sub{color:var(--mut);margin:0 0 16px}
+nav{display:flex;gap:4px;overflow-x:auto;border-bottom:2px solid var(--bd);margin-bottom:16px}
+nav button{flex:none;background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:10px 14px;font:inherit;font-weight:500;color:var(--mut);cursor:pointer}
+nav button[aria-selected="true"]{color:var(--ac);border-bottom-color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.row>*{flex:1 1 140px}
+input,select,textarea{width:100%;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:9px 11px}
+textarea{min-height:110px;resize:vertical}
+button.p{background:var(--ac);color:var(--bg);border:0;border-radius:8px;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer}
+button.g{background:none;border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:5px 10px;font:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.cite{display:inline-block;background:var(--acs);color:var(--ac);border-radius:4px;padding:0 6px;font-size:.8rem;font-weight:700;margin-left:4px}
+.src{border-left:3px solid var(--ac);padding:4px 0 4px 12px;margin:10px 0;font-size:.92rem}
+.src small{color:var(--mut)}
+mark{background:var(--mk);color:inherit;border-radius:2px}
+.doc{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--bd)}
+.doc small{color:var(--mut)}
+.opt{display:block;width:100%;text-align:left;margin:6px 0;padding:9px 12px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);border-radius:8px;font:inherit;cursor:pointer}
+.opt.ok{border-color:var(--ok);background:var(--acs)}.opt.bad{border-color:var(--bad)}
+.exp{font-size:.9rem;color:var(--mut);margin-top:6px}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:.92rem}
+th,td{border-bottom:1px solid var(--bd);padding:8px;text-align:left;vertical-align:top}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.9rem}
+.flow span{background:var(--acs);color:var(--ac);padding:4px 10px;border-radius:6px;font-weight:500}
+.muted{color:var(--mut)}
+[hidden]{display:none!important}
+</style></head>
+<body><main>
+<h1>Government exam preparation assistant</h1>
+<p class="sub">Ask questions, practise MCQs and plan your study. Answers come only from the notes you add, and every answer shows its source.</p>
+<p id="mode" class="muted" hidden>Server mode: answers come from the Python RAG backend and the index built from data/.</p>
+<nav role="tablist" id="tabs"></nav>
+
+<section id="t-lib">
+ <div class="card"><h2>Add study material</h2>
+  <div class="row"><input id="exam" placeholder="Exam (e.g. UPSC)" value="UPSC"><input id="subj" placeholder="Subject (e.g. Polity)"></div>
+  <div class="row"><input type="file" id="file" accept=".txt,.md" multiple></div>
+  <textarea id="paste" placeholder="Or paste notes here. Hindi and English both work."></textarea>
+  <div class="row" style="margin-top:10px"><button class="p" id="addbtn" style="flex:0 0 auto">Add to library</button></div>
+  <p class="muted" style="margin:0;font-size:.88rem">Text and Markdown files only. For a PDF, copy its text and paste it here. Everything stays in your browser.</p></div>
+ <div class="card"><h2>Library</h2><p id="stats" class="muted"></p><div id="docs"></div></div>
+</section>
+
+<section id="t-ask" hidden>
+ <div class="card"><div class="row"><select id="fexam"></select><select id="fsubj"></select></div>
+  <div class="row"><input id="q" placeholder="Which article gives the right to constitutional remedies?"><button class="p" id="askbtn" style="flex:0 0 auto">Ask</button></div></div>
+ <div id="ans"></div>
+</section>
+
+<section id="t-quiz" hidden>
+ <div class="card"><div class="row"><input id="topic" placeholder="Topic (leave empty for all notes)"><select id="nq"><option>3</option><option selected>5</option><option>10</option></select></div>
+  <button class="p" id="quizbtn">Make quiz</button></div>
+ <div id="quiz"></div>
+</section>
+
+<section id="t-plan" hidden>
+ <div class="card"><div class="row"><input id="pexam" placeholder="Exam" value="UPSC Prelims"><input id="pdays" type="number" min="7" max="365" value="90" aria-label="Days"><input id="phrs" type="number" min="1" max="14" step="0.5" value="6" aria-label="Hours per day"></div>
+  <div class="row"><input id="pweak" placeholder="Weak subjects, comma separated (optional)"></div>
+  <p class="muted" style="margin:0 0 10px;font-size:.88rem">Fields: exam, days available, hours per day.</p>
+  <button class="p" id="planbtn">Make plan</button></div>
+ <div id="plan"></div>
+</section>
+
+<section id="t-about" hidden>
+ <div class="card"><h2>About this project</h2>
+  <p>Aspirants study from many notes and PDFs, and general chatbots can invent answers. This assistant uses Retrieval-Augmented Generation (RAG): it first retrieves the most relevant passages from your own material, then builds the answer from those passages and cites them. If nothing relevant is found, it says so.</p>
+  <div class="flow"><span>Notes</span>→<span>Chunks</span>→<span>BM25 index</span>→<span>Top passages</span>→<span>Answer + sources</span></div></div>
+ <div class="card"><h2>How it works</h2>
+  <p><b>Chunking.</b> Notes are split into passages of about 80 words with 20 words of overlap.</p>
+  <p><b>Retrieval.</b> BM25 ranks passages by query terms, rare terms count more, and exam and subject filters narrow the search. Unicode tokenising supports Hindi.</p>
+  <p><b>Answering.</b> The best sentences from the top passages are returned in order, each marked with its source number.</p>
+  <p><b>Quiz.</b> Sentences become fill-in-the-blank MCQs. Wrong options come from other facts in your notes.</p>
+  <p><b>Plan.</b> Days are split into learning, revision and mock-test phases, with weak subjects given double weight.</p></div>
+ <div class="card"><h2>Limits</h2>
+  <p>This version runs fully in the browser with no server or AI model, so answers are extracted sentences and not rewritten explanations. It needs plain-text notes. Next steps: semantic embeddings, an LLM for fluent answers, PDF parsing and previous-year paper analysis.</p></div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const STOP=new Set("the a an of and or to in on for is are was were be by with as at from that this it its which what who how when where why do does did can will shall have has had not into than then also such their there these those about between under over".split(" "));
+const tok=s=>(s.toLowerCase().match(/[\p{L}\p{N}]+/gu)||[]).filter(w=>w.length>1&&!STOP.has(w));
+let API=false,META={exams:[],subjects:{}};
+let docs=[],chunks=[],df=new Map(),avgdl=1;
+
+const SAMPLES=[
+["UPSC","Polity","sample_polity.txt","Fundamental Rights are enshrined in Part III of the Indian Constitution, from Article 12 to Article 35. They are justiciable and enforceable by the Supreme Court under Article 32 and by High Courts under Article 226. The six fundamental rights are the Right to Equality, Right to Freedom, Right against Exploitation, Right to Freedom of Religion, Cultural and Educational Rights, and the Right to Constitutional Remedies. The Right to Property was removed from Part III by the 44th Amendment in 1978 and is now a legal right under Article 300A.\n\nDirective Principles of State Policy are given in Part IV of the Constitution, from Article 36 to Article 51. They are non-justiciable and were borrowed from the Irish Constitution. Fundamental Duties were added by the 42nd Amendment in 1976 on the recommendation of the Swaran Singh Committee and are listed in Article 51A. There are eleven Fundamental Duties after the 86th Amendment added one in 2002."],
+["UPSC","Economy","sample_economy.txt","The Reserve Bank of India was established on 1 April 1935 under the RBI Act 1934 and was nationalised in 1949. The Governor of the RBI is appointed by the Government of India. The repo rate is the rate at which the RBI lends short-term money to commercial banks. When the RBI raises the repo rate, borrowing becomes costlier and inflation tends to fall.\n\nThe Goods and Services Tax was introduced in India on 1 July 2017 through the 101st Constitutional Amendment. The GST Council, chaired by the Union Finance Minister, decides tax rates. NITI Aayog replaced the Planning Commission on 1 January 2015."],
+["UPSC","Geography","sample_geography.txt","The Ganga is the longest river of India and rises from the Gangotri glacier as the Bhagirathi. The Brahmaputra enters India in Arunachal Pradesh where it is known as the Dihang. The Western Ghats are older than the Himalayas and are a UNESCO World Heritage Site. Mount Kanchenjunga at 8586 metres is the highest peak in India. The Tropic of Cancer passes through eight Indian states including Gujarat, Rajasthan and Madhya Pradesh."]];
+
+function chunkText(t){const out=[];t.split(/\n\s*\n/).forEach(p=>{const w=p.trim().split(/\s+/).filter(Boolean);if(w.length<8)return;
+ if(w.length<=100){out.push(w.join(" "));return}
+ for(let i=0;i<w.length;i+=60){const part=w.slice(i,i+80);if(part.length>=15)out.push(part.join(" "))}});return out}
+
+function reindex(){chunks=[];df=new Map();
+ docs.forEach((d,di)=>chunkText(d.text).forEach(c=>{const t=tok(c),tf=new Map();t.forEach(w=>tf.set(w,(tf.get(w)||0)+1));chunks.push({di,exam:d.exam,subject:d.subject,file:d.name,text:c,tf,len:t.length||1})}));
+ chunks.forEach(c=>c.tf.forEach((_,w)=>df.set(w,(df.get(w)||0)+1)));
+ avgdl=chunks.reduce((a,c)=>a+c.len,0)/(chunks.length||1);renderLib();fillFilters()}
+const idf=w=>Math.log(1+(chunks.length-(df.get(w)||0)+.5)/((df.get(w)||0)+.5));
+
+function search(q,k,ex,su){const qt=[...new Set(tok(q))];if(!qt.length)return{hits:[],qt};
+ const hits=[];chunks.forEach((c,i)=>{if((ex&&c.exam!==ex)||(su&&c.subject!==su))return;let s=0,m=0;
+  qt.forEach(w=>{const f=c.tf.get(w);if(f){m++;s+=idf(w)*f*2.5/(f+1.5*(.25+.75*c.len/avgdl))}});
+  if(m)hits.push({c,s,cov:m/qt.length})});
+ hits.sort((a,b)=>b.s-a.s);return{hits:hits.slice(0,k),qt}}
+
+const split=t=>t.split(/(?<=[.!?।])\s+/).map(s=>s.trim()).filter(s=>s.split(/\s+/).length>=5);
+const hl=(t,qs)=>esc(t).replace(/[\p{L}\p{N}]+/gu,w=>qs.has(w.toLowerCase())?`<mark>${w}</mark>`:w);
+
+function renderLib(){const ex=new Set(docs.map(d=>d.exam)),su=new Set(docs.map(d=>d.subject));
+ $("stats").textContent=`${docs.length} files, ${chunks.length} passages, ${ex.size} exams, ${su.size} subjects`;
+ $("docs").innerHTML=docs.length?docs.map((d,i)=>`<div class="doc"><div>${esc(d.name)}<br><small>${esc(d.exam)} · ${esc(d.subject)}</small></div><button class="g" data-del="${i}" aria-label="Remove ${esc(d.name)}">Remove</button></div>`).join(""):'<p class="muted">Your library is empty. Add notes above to start.</p>'}
+$("docs").onclick=e=>{const i=e.target.dataset.del;if(i!==undefined){docs.splice(+i,1);reindex()}};
+
+function fillFilters(){const ex=API?META.exams:[...new Set(docs.map(d=>d.exam))],cur=$("fexam").value;
+ $("fexam").innerHTML='<option value="">All exams</option>'+ex.map(e=>`<option>${esc(e)}</option>`).join("");if(ex.includes(cur))$("fexam").value=cur;fillSubj()}
+function fillSubj(){const e=$("fexam").value,s=API?(e?META.subjects[e]||[]:[...new Set(Object.values(META.subjects).flat())]):[...new Set(docs.filter(d=>!e||d.exam===e).map(d=>d.subject))];
+ $("fsubj").innerHTML='<option value="">All subjects</option>'+s.map(x=>`<option>${esc(x)}</option>`).join("")}
+$("fexam").onchange=fillSubj;
+
+function addDoc(name,text){const exam=$("exam").value.trim()||"General",subject=$("subj").value.trim()||"General";docs.push({exam,subject,name,text});}
+$("addbtn").onclick=async()=>{let n=0;for(const f of $("file").files){addDoc(f.name,await f.text());n++}
+ const p=$("paste").value.trim();if(p){addDoc("pasted_notes_"+(docs.length+1)+".txt",p);n++}
+ if(n){$("paste").value="";$("file").value="";reindex()}else alert("Choose a file or paste some notes first.")};
+
+async function post(url,body){const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);return d}
+async function askServer(q){const out=$("ans");out.innerHTML='<div class="card muted">Searching...</div>';
+ try{const d=await post("/api/ask",{q,exam:$("fexam").value,subject:$("fsubj").value});
+  out.innerHTML=`<div class="card"><h2>Answer</h2><div style="white-space:pre-wrap">${esc(d.answer)}</div></div>`+(d.sources.length?`<div class="card"><h2>Sources</h2>${d.sources.map((h,i)=>`<div class="src"><span class="cite" style="margin:0 6px 0 0">${i+1}</span><small>${esc(h.file)} · ${esc(h.subject)} · page ${h.page} · score ${h.score.toFixed(2)}</small><br>${esc(h.text.slice(0,400))}...</div>`).join("")}</div>`:"")
+ }catch(e){out.innerHTML=`<div class="card"><b>Server error.</b><p class="muted">${esc(String(e.message))}</p></div>`}}
+async function quizServer(){const out=$("quiz");out.innerHTML='<div class="card muted">Writing questions...</div>';
+ try{const d=await post("/api/quiz",{topic:$("topic").value.trim(),n:+$("nq").value,exam:$("fexam").value,subject:$("fsubj").value});
+  renderQuiz(d.questions.map(x=>({q:x.q,opts:x.options,a:x.options[x.answer],src:"your index",full:x.explanation})))
+ }catch(e){out.innerHTML=`<div class="card"><b>Server error.</b><p class="muted">${esc(String(e.message))}</p></div>`}}
+async function planServer(){const out=$("plan");out.innerHTML='<div class="card muted">Planning...</div>';
+ try{const d=await post("/api/plan",{exam:$("pexam").value,days:+$("pdays").value,hours:+$("phrs").value,weak:$("pweak").value});
+  out.innerHTML=`<div class="card"><h2>Study plan</h2><div style="white-space:pre-wrap">${esc(d.plan)}</div></div>`
+ }catch(e){out.innerHTML=`<div class="card"><b>Server error.</b><p class="muted">${esc(String(e.message))}</p></div>`}}
+async function ask(){const q=$("q").value.trim();if(!q)return;if(API)return askServer(q);
+ const {hits,qt}=search(q,3,$("fexam").value,$("fsubj").value),out=$("ans");
+ if(!hits.length||hits[0].cov<.34){out.innerHTML='<div class="card"><b>Not found in your notes.</b><p class="muted">Try different keywords, widen the exam and subject filters, or add notes on this topic in the Library tab.</p></div>';return}
+ const qs=new Set(qt),cand=[];
+ hits.forEach((h,ci)=>split(h.c.text).forEach((s,pos)=>{const st=new Set(tok(s));let sc=0;qt.forEach(w=>{if(st.has(w))sc+=idf(w)});if(sc>0)cand.push({s,sc,ci,pos})}));
+ const best=cand.sort((a,b)=>b.sc-a.sc).slice(0,3).sort((a,b)=>a.ci-b.ci||a.pos-b.pos);
+ out.innerHTML=`<div class="card"><h2>Answer</h2>${best.map(b=>`<p>${hl(b.s,qs)}<span class="cite">${b.ci+1}</span></p>`).join("")}</div>
+ <div class="card"><h2>Sources</h2>${hits.map((h,i)=>`<div class="src"><span class="cite" style="margin:0 6px 0 0">${i+1}</span><small>${esc(h.c.file)} · ${esc(h.c.subject)} · match ${Math.round(h.cov*100)}%</small><br>${hl(h.c.text,qs)}</div>`).join("")}</div>`}
+$("askbtn").onclick=ask;$("q").onkeydown=e=>{if(e.key==="Enter")ask()};
+
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+function answerOf(s){const m=[...s.matchAll(/[\p{L}\p{N}][\p{L}\p{N}.\-]*[\p{L}\p{N}]|[\p{L}\p{N}]/gu)];
+ for(const x of m)if(/\d/.test(x[0])&&!/^\d{1,2}$/.test(x[0])||/^\d+(st|nd|rd|th)$/.test(x[0]))return{a:x[0],t:"n"};
+ const c=m.filter((x,i)=>i>0&&/^\p{Lu}/u.test(x[0])&&x[0].length>3&&!STOP.has(x[0].toLowerCase()));
+ return c.length?{a:c[0][0],t:"w"}:null}
+async function makeQuiz(){if(API)return quizServer();const topic=$("topic").value.trim(),ex=$("fexam").value,su=$("fsubj").value;let pool;
+ if(topic){pool=search(topic,6,ex,su).hits.filter(h=>h.cov>=.34).map(h=>h.c)}else pool=chunks.filter(c=>(!ex||c.exam===ex)&&(!su||c.subject===su));
+ const sents=shuffle(pool.flatMap(c=>split(c.text).map(s=>({s,f:c.file})))),all={n:new Set(),w:new Set()};
+ const items=sents.map(x=>({...x,k:answerOf(x.s)})).filter(x=>x.k);items.forEach(x=>all[x.k.t].add(x.k.a));
+ const qs=[];for(const x of items){if(qs.length>=+$("nq").value)break;
+  const d=shuffle([...all[x.k.t]].filter(v=>v.toLowerCase()!==x.k.a.toLowerCase())).slice(0,3);if(d.length<3)continue;
+  qs.push({q:x.s.replace(x.k.a,"_____"),opts:shuffle([x.k.a,...d]),a:x.k.a,src:x.f,full:x.s})}
+ return renderQuiz(qs)}
+function renderQuiz(qs){const out=$("quiz");if(!qs.length){out.innerHTML='<div class="card"><b>Not enough material for a quiz.</b><p class="muted">Add more notes or try a broader topic.</p></div>';return}
+ let score=0,done=0;
+ out.innerHTML=`<p id="sc" class="muted">Score: 0/${qs.length}</p>`+qs.map((q,i)=>`<div class="card" data-q="${i}"><b>${i+1}. Fill in the blank</b><p>${esc(q.q)}</p>${q.opts.map(o=>`<button class="opt" data-o="${esc(o)}">${esc(o)}</button>`).join("")}<div class="exp" hidden></div></div>`).join("");
+ out.onclick=e=>{const b=e.target.closest(".opt");if(!b)return;const card=b.closest(".card");if(card.dataset.done)return;card.dataset.done=1;
+  const q=qs[+card.dataset.q],ok=b.dataset.o===q.a;if(ok)score++;done++;
+  card.querySelectorAll(".opt").forEach(o=>{if(o.dataset.o===q.a)o.classList.add("ok")});if(!ok)b.classList.add("bad");
+  const ex=card.querySelector(".exp");ex.hidden=false;ex.textContent=(ok?"Correct. ":"Answer: "+q.a+". ")+q.full+" (Source: "+q.src+")";
+  $("sc").textContent=`Score: ${score}/${qs.length}`+(done===qs.length?" · Quiz finished":"")}}
+$("quizbtn").onclick=makeQuiz;
+
+async function makePlan(){if(API)return planServer();const days=Math.max(7,+$("pdays").value||90),hrs=+$("phrs").value||6,exam=$("pexam").value.trim()||"your exam";
+ const weak=$("pweak").value.split(",").map(s=>s.trim().toLowerCase()).filter(Boolean);
+ let subs=[...new Set(docs.map(d=>d.subject))].filter(s=>s!=="General");if(subs.length<3)subs=["Polity","History","Geography","Economy","Science","Current Affairs"];
+ const wl=subs.flatMap(s=>weak.includes(s.toLowerCase())?[s,s]:[s]),learn=Math.round(days*.65),rev=Math.round(days*.25),weeks=Math.ceil(days/7);
+ const h=x=>(Math.round(x*2)/2)+"h";let rows="",ri=0;
+ for(let w=0;w<weeks;w++){const a=w*7+1,b=Math.min(days,a+6),mid=(a+b)/2;let ph,focus,routine;
+  if(mid<=learn){ph="Learn";const f=[wl[ri%wl.length],wl[(ri+1)%wl.length]];ri+=2;focus=[...new Set(f)].join(", ");
+   routine=`New topics ${h(hrs*.55)}, revise yesterday ${h(hrs*.2)}, MCQs ${h(hrs*.15)}, current affairs 30m`}
+  else if(mid<=learn+rev){ph="Revise";focus="All subjects, weak areas first";routine=`Notes revision ${h(hrs*.5)}, MCQs ${h(hrs*.3)}, error log ${h(hrs*.1)}, current affairs 30m`}
+  else{ph="Mock tests";focus="Full-length tests and analysis";routine=`One mock test, ${h(hrs*.4)} analysis, weak-topic fixes ${h(hrs*.3)}, current affairs 30m`}
+  rows+=`<tr><td>${w+1}</td><td>${a}–${b}</td><td>${ph}</td><td>${esc(focus)}</td><td>${routine}. Weekly test on day ${b}.</td></tr>`}
+ $("plan").innerHTML=`<div class="card"><h2>${esc(exam)}: ${days}-day plan at ${hrs}h a day</h2><p class="muted">${learn} days learning, ${rev} days revision, ${days-learn-rev} days mock tests. Weak subjects get double time.</p><div class="wrap"><table><thead><tr><th>Week</th><th>Days</th><th>Phase</th><th>Focus</th><th>Daily routine</th></tr></thead><tbody>${rows}</tbody></table></div></div>`}
+$("planbtn").onclick=makePlan;
+
+const TABS=[["lib","Library"],["ask","Ask"],["quiz","Quiz"],["plan","Study plan"],["about","About"]];
+$("tabs").innerHTML=TABS.map(([k,l])=>`<button role="tab" data-k="${k}">${l}</button>`).join("");
+function show(k){TABS.forEach(([x])=>$("t-"+x).hidden=x!==k);$("tabs").querySelectorAll("button").forEach(b=>b.setAttribute("aria-selected",b.dataset.k===k))}
+$("tabs").onclick=e=>{if(e.target.dataset.k){show(e.target.dataset.k);history.replaceState(null,"","#"+e.target.dataset.k)}};
+SAMPLES.forEach(([exam,subject,name,text])=>docs.push({exam,subject,name,text}));reindex();
+show(TABS.some(t=>"#"+t[0]===location.hash)?location.hash.slice(1):"ask");
+fetch("/api/meta").then(r=>r.ok?r.json():Promise.reject()).then(m=>{API=true;META=m;fillFilters();$("mode").hidden=false;$("tabs").querySelector('[data-k="lib"]').hidden=true;show("ask")}).catch(()=>{});
+</script></body></html>
