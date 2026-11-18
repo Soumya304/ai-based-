@@ -1,0 +1,8 @@
+streamlit
+anthropic
+faiss-cpu
+sentence-transformers
+pypdf
+numpy
+flask
+pytest
